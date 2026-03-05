@@ -106,6 +106,11 @@ func (h *handler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) RefreshToken(w http.ResponseWriter, r *http.Request) (string, error) {
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+
 	cookie, err := r.Cookie("refresh_token")
 
 	if err != nil {
@@ -183,6 +188,9 @@ func (h *handler) RefreshToken(w http.ResponseWriter, r *http.Request) (string, 
 
 func (h *handler) Logout(w http.ResponseWriter, r *http.Request) {
 
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 	cookie, err := r.Cookie("refresh_token")
 
 	if err != nil {
