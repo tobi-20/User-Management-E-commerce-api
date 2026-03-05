@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	repo "Lanixpress/internal/adapters/postgresql/sqlc"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -41,4 +42,22 @@ func SplitToken(token string) (tokenID, secret string, ok bool) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true
+}
+func ToUserEmail(row repo.GetUserByEmailRow) User {
+	return User{
+		ID:           row.ID,
+		Name:         row.Name,
+		Email:        row.Email,
+		PasswordHash: row.PasswordHash,
+		TokenVersion: row.TokenVersion,
+	}
+}
+func ToUserID(row repo.GetUserByIDRow) User {
+	return User{
+		ID:           row.ID,
+		Name:         row.Name,
+		Email:        row.Email,
+		PasswordHash: row.PasswordHash,
+		TokenVersion: row.TokenVersion,
+	}
 }

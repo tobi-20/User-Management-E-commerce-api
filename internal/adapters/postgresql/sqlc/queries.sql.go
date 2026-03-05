@@ -223,12 +223,12 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const deleteRefreshTokenByUserID = `-- name: DeleteRefreshTokenByUserID :exec
-DELETE FROM refresh_tokens WHERE user_id= $1
+const deleteRefreshTokenByID = `-- name: DeleteRefreshTokenByID :exec
+DELETE FROM refresh_tokens WHERE token_id= $1
 `
 
-func (q *Queries) DeleteRefreshTokenByUserID(ctx context.Context, userID int64) error {
-	_, err := q.db.Exec(ctx, deleteRefreshTokenByUserID, userID)
+func (q *Queries) DeleteRefreshTokenByID(ctx context.Context, tokenID string) error {
+	_, err := q.db.Exec(ctx, deleteRefreshTokenByID, tokenID)
 	return err
 }
 
@@ -275,14 +275,40 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 	return i, err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, name, email, password_hash, token_version FROM users WHERE id= $1
+`
+
+type GetUserByIDRow struct {
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	TokenVersion int64  `json:"token_version"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.TokenVersion,
+	)
+	return i, err
+}
+
 const saveRefreshToken = `-- name: SaveRefreshToken :one
-INSERT INTO refresh_tokens(user_id, hashed_token, expires_at, token_id) values ($1, $2, $3, $4) returning id, user_id, hashed_token, expires_at, created_at, token_id
+INSERT INTO refresh_tokens(user_id, hashed_token, expires_at, created_at, token_id) values ($1, $2, $3, $4, $5) returning id, user_id, hashed_token, expires_at, created_at, token_id
 `
 
 type SaveRefreshTokenParams struct {
 	UserID      int64              `json:"user_id"`
 	HashedToken string             `json:"hashed_token"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	TokenID     string             `json:"token_id"`
 }
 
@@ -291,6 +317,7 @@ func (q *Queries) SaveRefreshToken(ctx context.Context, arg SaveRefreshTokenPara
 		arg.UserID,
 		arg.HashedToken,
 		arg.ExpiresAt,
+		arg.CreatedAt,
 		arg.TokenID,
 	)
 	var i RefreshToken

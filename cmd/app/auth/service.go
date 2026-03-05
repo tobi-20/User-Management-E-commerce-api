@@ -19,11 +19,12 @@ import (
 type Service interface {
 	CreateUser(ctx context.Context, arg repo.CreateUserParams) (repo.User, error)
 	GetUserByEmail(ctx context.Context, email string) (repo.GetUserByEmailRow, error)
-	GenerateAccessToken(ctx context.Context, user repo.GetUserByEmailRow) (string, error)
+	GenerateAccessToken(ctx context.Context, user helpers.User) (string, error)
 	SaveRefreshToken(ctx context.Context, arg repo.SaveRefreshTokenParams) (repo.RefreshToken, error)
-	DeleteRefreshTokenByUserID(ctx context.Context, userID int64) error
+	DeleteRefreshTokenByID(ctx context.Context, tokenID string) error
 	Login(ctx context.Context, req *LoginReq) (string, string, error)
 	GetRefreshTokenByID(ctx context.Context, tokenID string) (repo.RefreshToken, error)
+	GetUserByID(ctx context.Context, id int64) (repo.GetUserByIDRow, error)
 }
 
 type svc struct {
@@ -61,7 +62,7 @@ func (s *svc) Login(ctx context.Context, req *LoginReq) (string, string, error) 
 	log.Println("successful login!")
 
 	//Generate the access token with a helper function
-	accessToken, err := s.GenerateAccessToken(ctx, user)
+	accessToken, err := s.GenerateAccessToken(ctx, helpers.ToUserEmail(user))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -77,6 +78,7 @@ func (s *svc) Login(ctx context.Context, req *LoginReq) (string, string, error) 
 			Time:  time.Now().Add(7 * 24 * time.Hour),
 			Valid: true,
 		},
+
 		TokenID: tokenID,
 	}
 	_, err = s.SaveRefreshToken(ctx, params)
@@ -85,7 +87,7 @@ func (s *svc) Login(ctx context.Context, req *LoginReq) (string, string, error) 
 	return accessToken, rawToken, nil
 }
 
-func (s *svc) GenerateAccessToken(ctx context.Context, user repo.GetUserByEmailRow) (string, error) {
+func (s *svc) GenerateAccessToken(ctx context.Context, user helpers.User) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":   user.ID,
 		"email": user.Email,
@@ -110,11 +112,14 @@ func (s *svc) SaveRefreshToken(ctx context.Context, arg repo.SaveRefreshTokenPar
 	return s.repo.SaveRefreshToken(ctx, arg)
 }
 
-func (s *svc) DeleteRefreshTokenByUserID(ctx context.Context, id int64) error {
-	return s.repo.DeleteRefreshTokenByUserID(ctx, id)
-
+func (s *svc) DeleteRefreshTokenByID(ctx context.Context, tokenID string) error {
+	return s.repo.DeleteRefreshTokenByID(ctx, tokenID)
 }
 
 func (s *svc) GetRefreshTokenByID(ctx context.Context, tokenID string) (repo.RefreshToken, error) {
 	return s.repo.GetRefreshTokenByID(ctx, tokenID)
+}
+
+func (s *svc) GetUserByID(ctx context.Context, id int64) (repo.GetUserByIDRow, error) {
+	return s.repo.GetUserByID(ctx, id)
 }

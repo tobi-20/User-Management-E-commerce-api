@@ -11,6 +11,7 @@ import (
 
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -66,7 +67,7 @@ func (h *handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (h *handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginReq
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusBadRequest)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -89,13 +90,12 @@ func (h *handler) Login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   false,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 	})
 
-	json.Write(w, http.StatusAccepted, map[string]string{
-		"access_token":  accessToken,
-		"refresh_token": rawRefreshToken,
+	json.Write(w, http.StatusOK, map[string]string{
+		"access_token": accessToken,
 	})
 }
 func (h *handler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +129,72 @@ func (h *handler) RefreshToken(w http.ResponseWriter, r *http.Request) (string, 
 	if err != nil {
 		return "", errors.New("Invalid token")
 	}
-	err = h.service.DeleteRefreshTokenByUserID(r.Context())
+	err = h.service.DeleteRefreshTokenByID(r.Context(), tokenID)
 
-	return tokenID, nil
+	newRaw, newHash, _ := helpers.GenerateRefreshToken()
+	newTokenId, _, _ := helpers.SplitToken(newRaw)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    newRaw,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+	})
+
+	maxLifetime := 30 * 24 * time.Hour
+
+	if time.Since(stored.CreatedAt.Time) > maxLifetime {
+		return "", errors.New("refresh token reached max lifetime, login required")
+	}
+
+	newParams := repo.SaveRefreshTokenParams{
+		UserID:      stored.UserID,
+		HashedToken: newHash,
+		ExpiresAt: pgtype.Timestamptz{
+			Time:  time.Now().Add(7 * 24 * time.Hour),
+			Valid: true,
+		},
+		CreatedAt: pgtype.Timestamptz{
+			Time:  stored.CreatedAt.Time,
+			Valid: true,
+		},
+		TokenID: newTokenId,
+	}
+	_, err = h.service.SaveRefreshToken(r.Context(), newParams)
+
+	user, err := h.service.GetUserByID(r.Context(), stored.UserID)
+	if err != nil {
+		return "", errors.New("User does not exist")
+	}
+
+	newAccessToken, err := h.service.GenerateAccessToken(r.Context(), helpers.ToUserID(user))
+	if err != nil {
+		return "", err
+	}
+
+	json.Write(w, http.StatusOK, map[string]string{
+		"access_token": newAccessToken})
+
+	return newAccessToken, nil
+}
+
+func (h *handler) Logout(w http.ResponseWriter, r *http.Request) {
+
+	cookie, err := r.Cookie("refresh_token")
+
+	if err != nil {
+		return
+	}
+	tokenID, _, ok := helpers.SplitToken(cookie.Value)
+
+	if !ok {
+		return
+	}
+
+	err = h.service.DeleteRefreshTokenByID(r.Context(), tokenID)
+	json.Write(w, http.StatusOK, "logged out")
+
 }
