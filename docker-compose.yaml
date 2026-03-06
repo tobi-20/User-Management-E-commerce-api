@@ -3,8 +3,8 @@ services:
   image: postgres:16-alpine
   container_name: ecom-postgres
   environment:
-   POSTGRES_USER: postgres
-   POSTGRES_PASSWORD: postgres
+   POSTGRES_USER: xxxxx
+   POSTGRES_PASSWORD: xxxxxx
    POSTGRES_DB: ecom
   ports:
   - "5432:5432"
