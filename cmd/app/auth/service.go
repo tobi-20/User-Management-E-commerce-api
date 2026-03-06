@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"time"
 
@@ -49,7 +50,7 @@ func (s *svc) CreateUser(ctx context.Context, args repo.CreateUserParams) (repo.
 func (s *svc) Login(ctx context.Context, req *LoginReq) (string, string, error) {
 
 	//Get the user details by means of the email
-	user, err := s.GetUserByEmail(ctx, req.Email)
+	user, err := s.GetUserByEmail(ctx, strings.ToLower(req.Email))
 	if err != nil {
 		return "", "", err
 	}

@@ -61,3 +61,12 @@ func ToUserID(row repo.GetUserByIDRow) User {
 		TokenVersion: row.TokenVersion,
 	}
 }
+func ToCreatedUser(u repo.User) User {
+	return User{
+		ID:           u.ID,
+		Name:         u.Name,
+		Email:        u.Email,
+		PasswordHash: u.PasswordHash,
+		TokenVersion: u.TokenVersion,
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"Lanixpress/cmd/helpers"
 	repo "Lanixpress/internal/adapters/postgresql/sqlc"
 	"errors"
+	"strings"
 	"time"
 
 	"Lanixpress/internal/json"
@@ -25,19 +26,19 @@ func NewHandler(service Service) *handler {
 	}
 }
 
-func (h *handler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var user CreateUserRequest
+func (h *handler) Signup(w http.ResponseWriter, r *http.Request) {
+	var req SignupReq
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if err := json.Read(r, &user); err != nil {
+	if err := json.Read(r, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	hashedPassword, err := helpers.HashPassword(user.Password)
+	hashedPassword, err := helpers.HashPassword(req.Password)
 
 	if err != nil {
 		http.Error(w, "password not hashed successfully", http.StatusInternalServerError)
@@ -45,23 +46,62 @@ func (h *handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := repo.CreateUserParams{
-		Name:         user.Name,
-		Email:        user.Email,
+		Name:         req.Name,
+		Email:        strings.ToLower(req.Email),
 		PasswordHash: hashedPassword,
 	}
 
 	createdUser, err := h.service.CreateUser(r.Context(), params)
+	log.Println(createdUser)
 	if err != nil {
 		log.Println(err)
 	}
-
-	resp := &CreateUserResp{
-		Name:  createdUser.Name,
-		Email: createdUser.Email,
+	accessToken, err := h.service.GenerateAccessToken(r.Context(), helpers.ToCreatedUser(createdUser))
+	if err != nil {
+		http.Error(w, "access token not generated", http.StatusExpectationFailed)
+	}
+	raw, hashed, err := helpers.GenerateRefreshToken()
+	if err != nil {
+		log.Println(err.Error())
+		return
 	}
 
-	json.Write(w, http.StatusCreated, resp)
-	log.Println("REQ:", user.Name, user.Email, user.Password)
+	tokenId, _, ok := helpers.SplitToken(raw)
+	if !ok {
+		log.Println("unable to generate token id")
+	}
+
+	saved := repo.SaveRefreshTokenParams{
+		UserID:      createdUser.ID,
+		HashedToken: hashed,
+		ExpiresAt: pgtype.Timestamptz{
+			Time:  helpers.RefreshTokenExpiry,
+			Valid: true,
+		},
+		CreatedAt: pgtype.Timestamptz{
+			Time:  time.Now(),
+			Valid: true,
+		},
+		TokenID: tokenId,
+	}
+	h.service.SaveRefreshToken(r.Context(), saved)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    raw,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+	})
+
+	json.Write(w, http.StatusCreated, map[string]interface{}{
+		"access_token": accessToken,
+		"name":         createdUser.Name,
+		"email":        createdUser.Email,
+	})
+
 }
 
 func (h *handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -190,19 +230,34 @@ func (h *handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 	cookie, err := r.Cookie("refresh_token")
 
 	if err != nil {
+		http.Error(w, "token does not exist", http.StatusMethodNotAllowed)
 		return
 	}
 	tokenID, _, ok := helpers.SplitToken(cookie.Value)
 
 	if !ok {
+		http.Error(w, "token ID does not exist", http.StatusMethodNotAllowed)
 		return
 	}
 
-	err = h.service.DeleteRefreshTokenByID(r.Context(), tokenID)
+	if err := h.service.DeleteRefreshTokenByID(r.Context(), tokenID); err != nil {
+		http.Error(w, "failed to revoke token", http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now(),
+	})
 	json.Write(w, http.StatusOK, "logged out")
 
 }

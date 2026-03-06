@@ -38,8 +38,9 @@ func (app *application) mount() http.Handler {
 
 	userService := auth.NewService(repo.New(app.db))
 	userHandler := auth.NewHandler(userService)
-	mux.HandleFunc("/user", userHandler.CreateUser)
+	mux.HandleFunc("/signup", userHandler.Signup)
 	mux.HandleFunc("/login", userHandler.Login)
+	// mux.HandleFunc("/logout", middleware.CheckJWT(userHandler.Logout))
 
 	return mux
 }
