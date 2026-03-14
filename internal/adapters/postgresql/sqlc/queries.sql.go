@@ -11,6 +11,56 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const consumeRefreshTokenByID = `-- name: ConsumeRefreshTokenByID :one
+DELETE FROM refresh_tokens WHERE token_id= $1 returning user_id, hashed_token, expires_at, created_at, token_id
+`
+
+type ConsumeRefreshTokenByIDRow struct {
+	UserID      int64              `json:"user_id"`
+	HashedToken string             `json:"hashed_token"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	TokenID     string             `json:"token_id"`
+}
+
+func (q *Queries) ConsumeRefreshTokenByID(ctx context.Context, tokenID string) (ConsumeRefreshTokenByIDRow, error) {
+	row := q.db.QueryRow(ctx, consumeRefreshTokenByID, tokenID)
+	var i ConsumeRefreshTokenByIDRow
+	err := row.Scan(
+		&i.UserID,
+		&i.HashedToken,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.TokenID,
+	)
+	return i, err
+}
+
+const consumeVerification = `-- name: ConsumeVerification :one
+DELETE FROM verification_tokens WHERE id= $1 returning id, user_id, selector, created_at, expires_at
+`
+
+type ConsumeVerificationRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Selector  string             `json:"selector"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) ConsumeVerification(ctx context.Context, id pgtype.UUID) (ConsumeVerificationRow, error) {
+	row := q.db.QueryRow(ctx, consumeVerification, id)
+	var i ConsumeVerificationRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Selector,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const createBrand = `-- name: CreateBrand :one
 
 INSERT INTO brands (name) values($1) returning id, name
@@ -192,14 +242,15 @@ func (q *Queries) CreateShippingRules(ctx context.Context, arg CreateShippingRul
 
 const createUser = `-- name: CreateUser :one
 
-INSERT INTO users (name,email,password_hash,token_version) values ($1, $2, $3, $4) returning id, uid, name, email, password_hash, role, token_version, created_at
+INSERT INTO users (name,email,password_hash,token_version,verified_expiry ) values ($1, $2, $3, $4, $5) returning id, uid, name, email, password_hash, role, token_version, created_at, is_verified, verified_expiry
 `
 
 type CreateUserParams struct {
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
-	TokenVersion int64  `json:"token_version"`
+	Name           string             `json:"name"`
+	Email          string             `json:"email"`
+	PasswordHash   string             `json:"password_hash"`
+	TokenVersion   int64              `json:"token_version"`
+	VerifiedExpiry pgtype.Timestamptz `json:"verified_expiry"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -208,6 +259,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.Email,
 		arg.PasswordHash,
 		arg.TokenVersion,
+		arg.VerifiedExpiry,
 	)
 	var i User
 	err := row.Scan(
@@ -219,17 +271,10 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.TokenVersion,
 		&i.CreatedAt,
+		&i.IsVerified,
+		&i.VerifiedExpiry,
 	)
 	return i, err
-}
-
-const deleteRefreshTokenByID = `-- name: DeleteRefreshTokenByID :exec
-DELETE FROM refresh_tokens WHERE token_id= $1
-`
-
-func (q *Queries) DeleteRefreshTokenByID(ctx context.Context, tokenID string) error {
-	_, err := q.db.Exec(ctx, deleteRefreshTokenByID, tokenID)
-	return err
 }
 
 const getRefreshTokenByID = `-- name: GetRefreshTokenByID :one
@@ -246,6 +291,29 @@ func (q *Queries) GetRefreshTokenByID(ctx context.Context, tokenID string) (Refr
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.TokenID,
+	)
+	return i, err
+}
+
+const getResetPasswordBySelector = `-- name: GetResetPasswordBySelector :one
+SELECT verifier_hash, user_id, is_used,expiry FROM password_reset WHERE selector=$1
+`
+
+type GetResetPasswordBySelectorRow struct {
+	VerifierHash string             `json:"verifier_hash"`
+	UserID       int64              `json:"user_id"`
+	IsUsed       bool               `json:"is_used"`
+	Expiry       pgtype.Timestamptz `json:"expiry"`
+}
+
+func (q *Queries) GetResetPasswordBySelector(ctx context.Context, selector string) (GetResetPasswordBySelectorRow, error) {
+	row := q.db.QueryRow(ctx, getResetPasswordBySelector, selector)
+	var i GetResetPasswordBySelectorRow
+	err := row.Scan(
+		&i.VerifierHash,
+		&i.UserID,
+		&i.IsUsed,
+		&i.Expiry,
 	)
 	return i, err
 }
@@ -276,15 +344,16 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, password_hash, token_version FROM users WHERE id= $1
+SELECT id, name, email, password_hash, token_version, is_verified FROM users WHERE id= $1
 `
 
 type GetUserByIDRow struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
-	TokenVersion int64  `json:"token_version"`
+	ID           int64       `json:"id"`
+	Name         string      `json:"name"`
+	Email        string      `json:"email"`
+	PasswordHash string      `json:"password_hash"`
+	TokenVersion int64       `json:"token_version"`
+	IsVerified   pgtype.Bool `json:"is_verified"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
@@ -296,6 +365,69 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.Email,
 		&i.PasswordHash,
 		&i.TokenVersion,
+		&i.IsVerified,
+	)
+	return i, err
+}
+
+const getVerificationByToken = `-- name: GetVerificationByToken :one
+SELECT id, user_id, selector, expires_at, verifier_hash FROM verification_tokens WHERE selector= $1
+`
+
+type GetVerificationByTokenRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	UserID       int64              `json:"user_id"`
+	Selector     string             `json:"selector"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	VerifierHash string             `json:"verifier_hash"`
+}
+
+func (q *Queries) GetVerificationByToken(ctx context.Context, selector string) (GetVerificationByTokenRow, error) {
+	row := q.db.QueryRow(ctx, getVerificationByToken, selector)
+	var i GetVerificationByTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Selector,
+		&i.ExpiresAt,
+		&i.VerifierHash,
+	)
+	return i, err
+}
+
+const saveOneTimeToken = `-- name: SaveOneTimeToken :one
+INSERT INTO verification_tokens(user_id, selector, expires_at, verifier_hash) values ($1, $2, $3, $4) returning id, user_id, selector, expires_at, verifier_hash
+`
+
+type SaveOneTimeTokenParams struct {
+	UserID       int64              `json:"user_id"`
+	Selector     string             `json:"selector"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	VerifierHash string             `json:"verifier_hash"`
+}
+
+type SaveOneTimeTokenRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	UserID       int64              `json:"user_id"`
+	Selector     string             `json:"selector"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
+	VerifierHash string             `json:"verifier_hash"`
+}
+
+func (q *Queries) SaveOneTimeToken(ctx context.Context, arg SaveOneTimeTokenParams) (SaveOneTimeTokenRow, error) {
+	row := q.db.QueryRow(ctx, saveOneTimeToken,
+		arg.UserID,
+		arg.Selector,
+		arg.ExpiresAt,
+		arg.VerifierHash,
+	)
+	var i SaveOneTimeTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Selector,
+		&i.ExpiresAt,
+		&i.VerifierHash,
 	)
 	return i, err
 }
@@ -330,4 +462,87 @@ func (q *Queries) SaveRefreshToken(ctx context.Context, arg SaveRefreshTokenPara
 		&i.TokenID,
 	)
 	return i, err
+}
+
+const saveResetPassword = `-- name: SaveResetPassword :one
+INSERT INTO password_reset(verifier_hash, user_id, expiry, selector) values ($1, $2, $3, $4) returning user_id, verifier_hash, expiry, selector
+`
+
+type SaveResetPasswordParams struct {
+	VerifierHash string             `json:"verifier_hash"`
+	UserID       int64              `json:"user_id"`
+	Expiry       pgtype.Timestamptz `json:"expiry"`
+	Selector     string             `json:"selector"`
+}
+
+type SaveResetPasswordRow struct {
+	UserID       int64              `json:"user_id"`
+	VerifierHash string             `json:"verifier_hash"`
+	Expiry       pgtype.Timestamptz `json:"expiry"`
+	Selector     string             `json:"selector"`
+}
+
+func (q *Queries) SaveResetPassword(ctx context.Context, arg SaveResetPasswordParams) (SaveResetPasswordRow, error) {
+	row := q.db.QueryRow(ctx, saveResetPassword,
+		arg.VerifierHash,
+		arg.UserID,
+		arg.Expiry,
+		arg.Selector,
+	)
+	var i SaveResetPasswordRow
+	err := row.Scan(
+		&i.UserID,
+		&i.VerifierHash,
+		&i.Expiry,
+		&i.Selector,
+	)
+	return i, err
+}
+
+const updatePassword = `-- name: UpdatePassword :one
+UPDATE users SET password_hash= $1 WHERE id= $2 returning name
+`
+
+type UpdatePasswordParams struct {
+	PasswordHash string `json:"password_hash"`
+	ID           int64  `json:"id"`
+}
+
+func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) (string, error) {
+	row := q.db.QueryRow(ctx, updatePassword, arg.PasswordHash, arg.ID)
+	var name string
+	err := row.Scan(&name)
+	return name, err
+}
+
+const updateResetPasswordStatus = `-- name: UpdateResetPasswordStatus :exec
+UPDATE users SET is_used= true WHERE id= $1
+`
+
+func (q *Queries) UpdateResetPasswordStatus(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, updateResetPasswordStatus, id)
+	return err
+}
+
+const updateVerificationUsers = `-- name: UpdateVerificationUsers :exec
+UPDATE users SET verified_expiry= $1 WHERE id= $2
+`
+
+type UpdateVerificationUsersParams struct {
+	VerifiedExpiry pgtype.Timestamptz `json:"verified_expiry"`
+	ID             int64              `json:"id"`
+}
+
+func (q *Queries) UpdateVerificationUsers(ctx context.Context, arg UpdateVerificationUsersParams) error {
+	_, err := q.db.Exec(ctx, updateVerificationUsers, arg.VerifiedExpiry, arg.ID)
+	return err
+}
+
+const updateVerifiedState = `-- name: UpdateVerifiedState :exec
+UPDATE users SET is_verified= true WHERE id= $1
+`
+
+func (q *Queries) UpdateVerifiedState(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, updateVerifiedState, id)
+	return err
 }

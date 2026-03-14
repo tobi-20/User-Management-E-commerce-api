@@ -17,6 +17,11 @@ type SignupReq struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
+type ResetPassWordReq struct {
+	Selector string `json:"selector"`
+	Verifier string `json:"verifier"`
+	Password string `json:"password"`
+}
 type LoginReq struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -31,4 +36,8 @@ type RefreshArgs struct {
 	HashedToken string             `json:"hashed_token"`
 	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 	TokenID     string             `json:"token_id"`
+}
+
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
 }

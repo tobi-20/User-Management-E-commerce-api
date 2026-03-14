@@ -6,9 +6,13 @@ package repo
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	ConsumeRefreshTokenByID(ctx context.Context, tokenID string) (ConsumeRefreshTokenByIDRow, error)
+	ConsumeVerification(ctx context.Context, id pgtype.UUID) (ConsumeVerificationRow, error)
 	CreateBrand(ctx context.Context, name string) (Brand, error)
 	CreateCategory(ctx context.Context, name string) (Category, error)
 	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
@@ -17,11 +21,18 @@ type Querier interface {
 	CreateProductVariant(ctx context.Context, arg CreateProductVariantParams) (ProductVariant, error)
 	CreateShippingRules(ctx context.Context, arg CreateShippingRulesParams) (ShippingRule, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	DeleteRefreshTokenByID(ctx context.Context, tokenID string) error
 	GetRefreshTokenByID(ctx context.Context, tokenID string) (RefreshToken, error)
+	GetResetPasswordBySelector(ctx context.Context, selector string) (GetResetPasswordBySelectorRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
+	GetVerificationByToken(ctx context.Context, selector string) (GetVerificationByTokenRow, error)
+	SaveOneTimeToken(ctx context.Context, arg SaveOneTimeTokenParams) (SaveOneTimeTokenRow, error)
 	SaveRefreshToken(ctx context.Context, arg SaveRefreshTokenParams) (RefreshToken, error)
+	SaveResetPassword(ctx context.Context, arg SaveResetPasswordParams) (SaveResetPasswordRow, error)
+	UpdatePassword(ctx context.Context, arg UpdatePasswordParams) (string, error)
+	UpdateResetPasswordStatus(ctx context.Context, id int64) error
+	UpdateVerificationUsers(ctx context.Context, arg UpdateVerificationUsersParams) error
+	UpdateVerifiedState(ctx context.Context, id int64) error
 }
 
 var _ Querier = (*Queries)(nil)

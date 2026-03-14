@@ -40,7 +40,9 @@ func (app *application) mount() http.Handler {
 	userHandler := auth.NewHandler(userService)
 	mux.HandleFunc("/signup", userHandler.Signup)
 	mux.HandleFunc("/login", userHandler.Login)
-	// mux.HandleFunc("/logout", middleware.CheckJWT(userHandler.Logout))
+	mux.HandleFunc("/refresh", userHandler.RefreshToken)
+	mux.HandleFunc("/verify-user", userHandler.VerifyUser)
+	mux.HandleFunc("/send-reset", userHandler.SendResetTokenToEmail)
 
 	return mux
 }

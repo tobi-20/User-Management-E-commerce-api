@@ -41,6 +41,14 @@ type OrderItem struct {
 	ItemTotal        int64       `json:"item_total"`
 }
 
+type PasswordReset struct {
+	VerifierHash string             `json:"verifier_hash"`
+	UserID       int64              `json:"user_id"`
+	IsUsed       bool               `json:"is_used"`
+	Expiry       pgtype.Timestamptz `json:"expiry"`
+	Selector     string             `json:"selector"`
+}
+
 type Product struct {
 	ID          int64       `json:"id"`
 	Name        string      `json:"name"`
@@ -76,12 +84,23 @@ type ShippingRule struct {
 }
 
 type User struct {
-	ID           int64              `json:"id"`
-	Uid          pgtype.UUID        `json:"uid"`
-	Name         string             `json:"name"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	Role         interface{}        `json:"role"`
-	TokenVersion int64              `json:"token_version"`
+	ID             int64              `json:"id"`
+	Uid            pgtype.UUID        `json:"uid"`
+	Name           string             `json:"name"`
+	Email          string             `json:"email"`
+	PasswordHash   string             `json:"password_hash"`
+	Role           interface{}        `json:"role"`
+	TokenVersion   int64              `json:"token_version"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	IsVerified     pgtype.Bool        `json:"is_verified"`
+	VerifiedExpiry pgtype.Timestamptz `json:"verified_expiry"`
+}
+
+type VerificationToken struct {
+	ID           pgtype.UUID        `json:"id"`
+	UserID       int64              `json:"user_id"`
+	Selector     string             `json:"selector"`
+	ExpiresAt    pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	VerifierHash string             `json:"verifier_hash"`
 }

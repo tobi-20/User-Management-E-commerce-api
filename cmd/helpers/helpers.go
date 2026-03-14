@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log"
+	"net/smtp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -21,7 +23,7 @@ func TextToString(t pgtype.Text) string {
 
 func GenerateRefreshToken() (string, string, error) {
 	tokenID := uuid.New().String()
-	secret := randomString(32)
+	secret := GenerateRandString(32)
 
 	hashedToken, err := bcrypt.GenerateFromPassword([]byte(secret), 11)
 	if err != nil {
@@ -30,18 +32,18 @@ func GenerateRefreshToken() (string, string, error) {
 	return fmt.Sprintf("%s.%s", tokenID, secret), string(hashedToken), nil
 }
 
-func randomString(n int) string {
+func GenerateRandString(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-func SplitToken(token string) (tokenID, secret string, ok bool) {
+func SplitToken(token string) (tokenID, secret string, err error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 {
-		return "", "", false
+		return "", "", err
 	}
-	return parts[0], parts[1], true
+	return parts[0], parts[1], nil
 }
 func ToUserEmail(row repo.GetUserByEmailRow) User {
 	return User{
@@ -69,4 +71,37 @@ func ToCreatedUser(u repo.User) User {
 		PasswordHash: u.PasswordHash,
 		TokenVersion: u.TokenVersion,
 	}
+}
+
+func SendVerificationLinkToEmail(link, email string) error {
+
+	from := "olutobiseun18@gmail.com"
+	password := "bfwhtpyrmycnsoqx"
+
+	auth := smtp.PlainAuth("", from, password, "smtp.gmail.com")
+	to := []string{email}
+	msg := []byte(fmt.Sprintf("MIME-Version: 1.0\r\n"+"Content-Type: text/html; charset=UTF-8\r\n"+"To: %s\r\n"+"Subject: Verify your email\r\n"+"\r\n"+`<p>Click the link to verify your account:</p><a href="%s">Verify Email</a>`, email, link))
+
+	err := smtp.SendMail("smtp.gmail.com:587", auth, from, to, msg)
+	if err != nil {
+		log.Println("failed to send email:", err)
+		return err
+	}
+	return nil
+}
+func SendResetPasswordLinkToEmail(link, email string) error {
+
+	from := "olutobiseun18@gmail.com"
+	password := "bfwhtpyrmycnsoqx"
+
+	auth := smtp.PlainAuth("", from, password, "smtp.gmail.com")
+	to := []string{email}
+	msg := []byte(fmt.Sprintf("MIME-Version: 1.0\r\n"+"Content-Type: text/html; charset=UTF-8\r\n"+"To: %s\r\n"+"Subject: Reset your Password\r\n"+"\r\n"+`<p>Click the link to rest your password:</p><a href="%s">Reset password</a>`, email, link))
+
+	err := smtp.SendMail("smtp.gmail.com:587", auth, from, to, msg)
+	if err != nil {
+		log.Println("failed to send email:", err)
+		return err
+	}
+	return nil
 }
