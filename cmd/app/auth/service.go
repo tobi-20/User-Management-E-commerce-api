@@ -34,39 +34,25 @@ var (
 	ErrTokenRevokeFailed       = errors.New("failed to revoke refresh token")
 )
 
-type Service interface {
-	ConsumeRefreshTokenByID(ctx context.Context, tokenID string) (repo.ConsumeRefreshTokenByIDRow, error)
-	ConsumeVerification(ctx context.Context, id pgtype.UUID) (repo.ConsumeVerificationRow, error)
+type AuthService interface {
 	ConsumeCookie(ctx context.Context, cookie *http.Cookie) error
-	CreateUser(ctx context.Context, arg repo.CreateUserParams) (repo.User, error)
 	GenerateAccessToken(ctx context.Context, user helpers.User) (string, error)
-	GetUserByEmail(ctx context.Context, email string) (repo.GetUserByEmailRow, error)
-	GetRefreshTokenByID(ctx context.Context, tokenID string) (repo.RefreshToken, error)
-	GetUserByID(ctx context.Context, id int64) (repo.GetUserByIDRow, error)
-	GetResetPasswordBySelector(ctx context.Context, selector string) (repo.GetResetPasswordBySelectorRow, error)
-	GetVerificationByToken(ctx context.Context, token string) (repo.GetVerificationByTokenRow, error)
 	IssueAuthTokens(ctx context.Context, user helpers.User) (string, string, error)
 	IssueRefreshToken(ctx context.Context, rawToken string) (string, string, error)
-	SaveRefreshToken(ctx context.Context, arg repo.SaveRefreshTokenParams) (repo.RefreshToken, error)
 	Login(ctx context.Context, req LoginReq) (string, string, error)
 	ResetPassword(ctx context.Context, newPasswordParam ResetPassWordReq) error
-	SaveOneTimeToken(ctx context.Context, arg repo.SaveOneTimeTokenParams) (repo.SaveOneTimeTokenRow, error)
-	SaveResetPassword(ctx context.Context, arg repo.SaveResetPasswordParams) (repo.SaveResetPasswordRow, error)
-	SendResetTokenToEmail(ctx context.Context, req ForgotPasswordRequest) error
-	SendConfirmUserTokenToEmail(ctx context.Context, req SignupReq) error
-	UpdatePassword(ctx context.Context, arg repo.UpdatePasswordParams) (string, error)
-	UpdateVerificationUsers(ctx context.Context, arg repo.UpdateVerificationUsersParams) error
-	UpdateVerifiedState(ctx context.Context, id int64) error
-	ValidateVerification(ctx context.Context, verifier string, selector string) (repo.GetUserByIDRow, error)
 	ValidateResetPasswordTokens(ctx context.Context, selector string, verifier string) (int64, error)
+	SendConfirmUserTokenToEmail(ctx context.Context, req SignupReq) error
+	SendResetTokenToEmail(ctx context.Context, req ForgotPasswordRequest) error
+	ValidateVerification(ctx context.Context, verifier string, selector string) (repo.GetUserByIDRow, error)
 }
 
 type svc struct {
-	repo      *repo.Queries
+	repo      AuthRepository
 	jwtSecret string
 }
 
-func NewService(repo *repo.Queries) Service {
+func NewService(repo AuthRepository) AuthService {
 	return &svc{
 		repo:      repo,
 		jwtSecret: os.Getenv("JWT_ACCESS_SECRET"),
@@ -89,7 +75,7 @@ func (s *svc) SendConfirmUserTokenToEmail(ctx context.Context, req SignupReq) er
 		PasswordHash: hashedPassword,
 	}
 
-	createdUser, err := s.CreateUser(ctx, params)
+	createdUser, err := s.repo.CreateUser(ctx, params)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -115,7 +101,7 @@ func (s *svc) SendConfirmUserTokenToEmail(ctx context.Context, req SignupReq) er
 		VerifierHash: hashedVerifier,
 	}
 
-	if _, err := s.SaveOneTimeToken(ctx, verifyParams); err != nil {
+	if _, err := s.repo.SaveOneTimeToken(ctx, verifyParams); err != nil {
 		return err
 	}
 
@@ -132,15 +118,11 @@ func (s *svc) SendConfirmUserTokenToEmail(ctx context.Context, req SignupReq) er
 	}()
 	return nil
 }
-func (s *svc) CreateUser(ctx context.Context, args repo.CreateUserParams) (repo.User, error) {
-	return s.repo.CreateUser(ctx, args)
-
-}
 
 func (s *svc) Login(ctx context.Context, req LoginReq) (string, string, error) {
 
 	//Get the user details by means of the email
-	user, err := s.GetUserByEmail(ctx, strings.ToLower(req.Email))
+	user, err := s.repo.GetUserByEmail(ctx, strings.ToLower(req.Email))
 	if err != nil {
 		return "", "", ErrUserNotFound
 	}
@@ -173,53 +155,6 @@ func (s *svc) GenerateAccessToken(ctx context.Context, user helpers.User) (strin
 	return signedToken, nil
 }
 
-func (s *svc) GetUserByEmail(ctx context.Context, email string) (repo.GetUserByEmailRow, error) {
-	return s.repo.GetUserByEmail(ctx, email)
-}
-
-// saving generated refresh token to database
-func (s *svc) SaveRefreshToken(ctx context.Context, arg repo.SaveRefreshTokenParams) (repo.RefreshToken, error) {
-	return s.repo.SaveRefreshToken(ctx, arg)
-}
-
-func (s *svc) ConsumeRefreshTokenByID(ctx context.Context, tokenID string) (repo.ConsumeRefreshTokenByIDRow, error) {
-	return s.repo.ConsumeRefreshTokenByID(ctx, tokenID)
-}
-
-func (s *svc) GetRefreshTokenByID(ctx context.Context, tokenID string) (repo.RefreshToken, error) {
-	return s.repo.GetRefreshTokenByID(ctx, tokenID)
-}
-
-func (s *svc) GetUserByID(ctx context.Context, id int64) (repo.GetUserByIDRow, error) {
-	return s.repo.GetUserByID(ctx, id)
-}
-
-func (s *svc) ConsumeVerification(ctx context.Context, id pgtype.UUID) (repo.ConsumeVerificationRow, error) {
-	return s.repo.ConsumeVerification(ctx, id)
-}
-
-func (s *svc) SaveOneTimeToken(ctx context.Context, arg repo.SaveOneTimeTokenParams) (repo.SaveOneTimeTokenRow, error) {
-	return s.repo.SaveOneTimeToken(ctx, arg)
-}
-
-func (s *svc) GetVerificationByToken(ctx context.Context, token string) (repo.GetVerificationByTokenRow, error) {
-	return s.repo.GetVerificationByToken(ctx, token)
-}
-func (s *svc) UpdateVerificationUsers(ctx context.Context, arg repo.UpdateVerificationUsersParams) error {
-	return s.repo.UpdateVerificationUsers(ctx, arg)
-}
-func (s *svc) UpdateVerifiedState(ctx context.Context, id int64) error {
-	return s.repo.UpdateVerifiedState(ctx, id)
-}
-
-func (s *svc) SaveResetPassword(ctx context.Context, arg repo.SaveResetPasswordParams) (repo.SaveResetPasswordRow, error) {
-	return s.repo.SaveResetPassword(ctx, arg)
-}
-
-func (s *svc) GetResetPasswordBySelector(ctx context.Context, selector string) (repo.GetResetPasswordBySelectorRow, error) {
-	return s.repo.GetResetPasswordBySelector(ctx, selector)
-}
-
 func (s *svc) IssueAuthTokens(ctx context.Context, user helpers.User) (string, string, error) {
 
 	accessToken, err := s.GenerateAccessToken(ctx, user)
@@ -248,7 +183,7 @@ func (s *svc) IssueAuthTokens(ctx context.Context, user helpers.User) (string, s
 
 		TokenID: tokenID,
 	}
-	if _, err = s.SaveRefreshToken(ctx, params); err != nil {
+	if _, err = s.repo.SaveRefreshToken(ctx, params); err != nil {
 		log.Println(err)
 		return "", "", err
 	}
@@ -256,17 +191,13 @@ func (s *svc) IssueAuthTokens(ctx context.Context, user helpers.User) (string, s
 	return accessToken, rawToken, nil
 }
 
-func (s *svc) UpdatePassword(ctx context.Context, arg repo.UpdatePasswordParams) (string, error) {
-	return s.repo.UpdatePassword(ctx, arg)
-}
-
 func (s *svc) ValidateVerification(ctx context.Context, verifier string, selector string) (repo.GetUserByIDRow, error) {
 
-	verifyRow, err := s.GetVerificationByToken(ctx, selector)
+	verifyRow, err := s.repo.GetVerificationByToken(ctx, selector)
 	if err != nil {
 		return repo.GetUserByIDRow{}, ErrInvalidToken
 	}
-	user, err := s.GetUserByID(ctx, verifyRow.UserID)
+	user, err := s.repo.GetUserByID(ctx, verifyRow.UserID)
 	if err != nil {
 		return repo.GetUserByIDRow{}, ErrUserNotFound
 	}
@@ -284,11 +215,11 @@ func (s *svc) ValidateVerification(ctx context.Context, verifier string, selecto
 		return repo.GetUserByIDRow{}, ErrLinkExpired
 	}
 
-	if _, err = s.ConsumeVerification(ctx, verifyRow.ID); err != nil {
+	if _, err = s.repo.ConsumeVerification(ctx, verifyRow.ID); err != nil {
 
 		return repo.GetUserByIDRow{}, ErrVerificationFailed
 	}
-	if err = s.UpdateVerifiedState(ctx, verifyRow.UserID); err != nil {
+	if err = s.repo.UpdateVerifiedState(ctx, verifyRow.UserID); err != nil {
 		log.Println(err.Error())
 		return repo.GetUserByIDRow{}, ErrUpdateVerifiedFailed
 	}
@@ -302,7 +233,7 @@ func (s *svc) IssueRefreshToken(ctx context.Context, rawToken string) (string, s
 		return "", "", err
 	}
 
-	refreshToken, err := s.GetRefreshTokenByID(ctx, tokenID)
+	refreshToken, err := s.repo.GetRefreshTokenByID(ctx, tokenID)
 	if err != nil {
 		return "", "", ErrInvalidToken
 	}
@@ -314,7 +245,7 @@ func (s *svc) IssueRefreshToken(ctx context.Context, rawToken string) (string, s
 		return "", "", ErrRefreshTokenMaxLifetime
 	}
 
-	stored, err := s.ConsumeRefreshTokenByID(ctx, tokenID)
+	stored, err := s.repo.ConsumeRefreshTokenByID(ctx, tokenID)
 	if err != nil {
 		return "", "", errors.New("token missing")
 	}
@@ -346,11 +277,11 @@ func (s *svc) IssueRefreshToken(ctx context.Context, rawToken string) (string, s
 		},
 		TokenID: newTokenId,
 	}
-	if _, err = s.SaveRefreshToken(ctx, newParams); err != nil {
+	if _, err = s.repo.SaveRefreshToken(ctx, newParams); err != nil {
 		return "", "", err
 	}
 
-	user, err := s.GetUserByID(ctx, stored.UserID)
+	user, err := s.repo.GetUserByID(ctx, stored.UserID)
 	if err != nil {
 		return "", "", ErrUserNotFound
 	}
@@ -368,14 +299,14 @@ func (s *svc) ConsumeCookie(ctx context.Context, cookie *http.Cookie) error {
 	if err != nil {
 		return err
 	}
-	if _, err := s.ConsumeRefreshTokenByID(ctx, tokenID); err != nil {
+	if _, err := s.repo.ConsumeRefreshTokenByID(ctx, tokenID); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *svc) SendResetTokenToEmail(ctx context.Context, req ForgotPasswordRequest) error {
-	user, err := s.GetUserByEmail(ctx, strings.ToLower(req.Email))
+	user, err := s.repo.GetUserByEmail(ctx, strings.ToLower(req.Email))
 	log.Println(req.Email)
 	if err != nil {
 		return ErrUserNotFound
@@ -397,7 +328,7 @@ func (s *svc) SendResetTokenToEmail(ctx context.Context, req ForgotPasswordReque
 		},
 	}
 
-	if _, err = s.SaveResetPassword(ctx, params); err != nil {
+	if _, err = s.repo.SaveResetPassword(ctx, params); err != nil {
 		return err
 	}
 
@@ -414,7 +345,7 @@ func (s *svc) SendResetTokenToEmail(ctx context.Context, req ForgotPasswordReque
 }
 
 func (s *svc) ValidateResetPasswordTokens(ctx context.Context, selector string, verifier string) (int64, error) {
-	resetPasswordRow, err := s.GetResetPasswordBySelector(ctx, selector)
+	resetPasswordRow, err := s.repo.GetResetPasswordBySelector(ctx, selector)
 	if err != nil {
 		return 0, ErrTokenNotFound
 	}
@@ -442,7 +373,7 @@ func (s *svc) ResetPassword(ctx context.Context, newPassParams ResetPassWordReq)
 		ID:           userId,
 	}
 
-	if _, err = s.UpdatePassword(ctx, params); err != nil {
+	if _, err = s.repo.UpdatePassword(ctx, params); err != nil {
 		return err
 	}
 	return nil

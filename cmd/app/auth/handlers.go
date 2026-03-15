@@ -15,10 +15,10 @@ import (
 var e *err.Error
 
 type handler struct {
-	service Service
+	service AuthService
 }
 
-func NewHandler(service Service) *handler {
+func NewHandler(service AuthService) *handler {
 	return &handler{
 		service: service,
 	}
