@@ -1,9 +1,9 @@
 package auth
 
 import (
-	"Lanixpress/cmd/app/globals"
-	"Lanixpress/cmd/helpers"
-	repo "Lanixpress/internal/adapters/postgresql/sqlc"
+	"ecom/cmd/app/globals"
+	"ecom/cmd/helpers"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 	"context"
 	"errors"
 	"fmt"
@@ -344,6 +344,7 @@ func (s *svc) SendResetTokenToEmail(ctx context.Context, req ForgotPasswordReque
 	return nil
 }
 
+// done
 func (s *svc) ValidateResetPasswordTokens(ctx context.Context, selector string, verifier string) (int64, error) {
 	resetPasswordRow, err := s.repo.GetResetPasswordBySelector(ctx, selector)
 	if err != nil {
@@ -362,8 +363,12 @@ func (s *svc) ValidateResetPasswordTokens(ctx context.Context, selector string, 
 	}
 	return resetPasswordRow.UserID, nil
 }
+
 func (s *svc) ResetPassword(ctx context.Context, newPassParams ResetPassWordReq) error {
 	userId, err := s.ValidateResetPasswordTokens(ctx, newPassParams.Selector, newPassParams.Verifier)
+	if err != nil {
+		return err
+	}
 	hashedNew, err := helpers.HashPassword(newPassParams.Password)
 	if err != nil {
 		return err

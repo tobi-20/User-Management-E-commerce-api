@@ -1,7 +1,7 @@
 package auth
 
 import (
-	repo "Lanixpress/internal/adapters/postgresql/sqlc"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"

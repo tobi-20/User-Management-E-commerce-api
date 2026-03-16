@@ -1,7 +1,7 @@
 package main
 
 import (
-	"Lanixpress/internal/env"
+	"ecom/internal/env"
 	"context"
 	"log"
 

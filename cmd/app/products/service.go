@@ -1,7 +1,7 @@
 package products
 
 import (
-	repo "Lanixpress/internal/adapters/postgresql/sqlc"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 	"context"
 )
 

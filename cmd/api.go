@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"Lanixpress/cmd/app/auth"
-	repo "Lanixpress/internal/adapters/postgresql/sqlc"
+	"ecom/cmd/app/auth"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 
 	"github.com/jackc/pgx/v5"
 )

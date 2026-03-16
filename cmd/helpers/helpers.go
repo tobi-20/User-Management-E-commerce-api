@@ -1,7 +1,7 @@
 package helpers
 
 import (
-	repo "Lanixpress/internal/adapters/postgresql/sqlc"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"

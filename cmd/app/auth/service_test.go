@@ -1,7 +1,7 @@
 package auth
 
 import (
-	repo "Lanixpress/internal/adapters/postgresql/sqlc"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 	"context"
 	"errors"
 	"testing"
@@ -154,4 +154,46 @@ func TestValidateResetPasswordTokens_Happy(t *testing.T) {
 	userId, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", text)
 	assert.NoError(t, err)
 	assert.Equal(t, userId, int64(3))
+}
+
+func TestResetPassword_ValidateResetPasswordTokens(t *testing.T) {
+	m := &mockRepo{}
+	testParams := ResetPassWordReq{
+		Selector: "selector",
+		Verifier: "verifier",
+		Password: "password",
+	}
+
+	svc := NewService(m)
+	m.On("GetResetPasswordBySelector", mock.Anything, "selector").Return(repo.GetResetPasswordBySelectorRow{}, errors.New("error"))
+
+	err := svc.ResetPassword(context.Background(), testParams)
+	assert.Error(t, err)
+}
+func TestResetPassword_UpdatePassword(t *testing.T) {
+	m := &mockRepo{}
+	svc := NewService(m)
+	testParams := ResetPassWordReq{
+		Selector: "selector",
+		Verifier: "verifier",
+		Password: "password",
+	}
+
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(testParams.Verifier), bcrypt.DefaultCost)
+
+	m.On("GetResetPasswordBySelector", mock.Anything, "selector").Return(repo.GetResetPasswordBySelectorRow{
+		VerifierHash: string(hashed),
+		UserID:       int64(3),
+		IsUsed:       false,
+		Expiry: pgtype.Timestamptz{
+			Time:  time.Now().Add(time.Hour),
+			Valid: true,
+		},
+	}, nil)
+
+
+	m.On("UpdatePassword", mock.Anything, mock.Anything).Return("", errors.New("error"))
+
+	err := svc.ResetPassword(context.Background(), testParams)
+	assert.Error(t, err)
 }

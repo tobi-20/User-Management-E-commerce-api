@@ -1,4 +1,4 @@
-module Lanixpress
+module ecom
 
 go 1.24.0
 

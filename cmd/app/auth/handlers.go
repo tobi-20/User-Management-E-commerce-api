@@ -1,12 +1,12 @@
 package auth
 
 import (
-	"Lanixpress/cmd/app/globals"
-	"Lanixpress/cmd/helpers"
+	"ecom/cmd/app/globals"
+	"ecom/cmd/helpers"
 	"time"
 
-	"Lanixpress/internal/err"
-	"Lanixpress/internal/json"
+	"ecom/internal/err"
+	"ecom/internal/json"
 	"log"
 
 	"net/http"

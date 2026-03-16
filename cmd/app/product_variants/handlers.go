@@ -1,8 +1,8 @@
 package product_variants
 
 import (
-	repo "Lanixpress/internal/adapters/postgresql/sqlc"
-	"Lanixpress/internal/json"
+	repo "ecom/internal/adapters/postgresql/sqlc"
+	"ecom/internal/json"
 
 	"log"
 	"net/http"

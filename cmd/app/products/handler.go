@@ -1,9 +1,9 @@
 package products
 
 import (
-	"Lanixpress/cmd/helpers"
-	repo "Lanixpress/internal/adapters/postgresql/sqlc"
-	"Lanixpress/internal/json"
+	"ecom/cmd/helpers"
+	repo "ecom/internal/adapters/postgresql/sqlc"
+	"ecom/internal/json"
 	"log"
 	"net/http"
 )
