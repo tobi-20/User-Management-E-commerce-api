@@ -1,21 +1,28 @@
-JWT Authentication in Go
+Ecom API
 
-A full JWT-based authentication system in Go with login, access tokens, refresh tokens, rotation, and logout designed for stateless, scalable applications. 
-Includes secure cookie handling for refresh tokens.
+A production-ready e-commerce REST API built in Go with a clean layered architecture — handler, service, and repository layers with full unit test coverage.
 
 Features
--Login with email and password
--Short-lived access tokens (15 min)
--Long-lived refresh tokens (7 days) stored securely in DB
--Refresh token rotation to prevent reuse
--Max refresh token lifetime enforcement (30 days)
--Logout that revokes refresh tokens
--Cookie-based refresh tokens (HttpOnly + SameSite=Lax)
+Auth
+- JWT-based authentication with short-lived access tokens (15 min)
+- Refresh token rotation with max lifetime enforcement (30 days)
+- HttpOnly cookie-based refresh tokens
+- Email verification on signup
+- Password reset flow with one-time tokens
+- Logout with token revocation
 
-Full stateless access token validation
+E-commerce
+- Product and variant management(pending)
+- Order and order item processing(pending)
+- Shipping rules engine(pending)
+- Brand and category management(pending)
+
 Tech Stack
-Language: Go
-Database: PostgreSQL (with SQLC)
-Hashing: bcrypt
-JWT Library: github.com/golang-jwt/jwt
-Cookie Security: HttpOnly, SameSite=Lax
+- Language: Go
+- Database: PostgreSQL via SQLC
+- Auth: bcrypt, github.com/golang-jwt/jwt
+- Testing: testify/mock
+
+Architecture
+
+Clean separation of concerns across three layers — handlers handle HTTP, services own business logic, repositories own database access. Interfaces between layers enable full unit testability without a live database.
