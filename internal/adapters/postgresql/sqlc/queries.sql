@@ -34,7 +34,7 @@ INSERT INTO shipping_rules(max_price_in_kobo, min_price_in_kobo,type, value) val
 INSERT INTO refresh_tokens(user_id, hashed_token, expires_at, created_at, token_id) values ($1, $2, $3, $4, $5) returning *;
 
 -- name: GetUserByEmail :one
-SELECT id, name, email, password_hash, token_version FROM users WHERE email= $1;
+SELECT id, name, email, password_hash, token_version, is_verified FROM users WHERE email= $1;
 
 
 -- name: ConsumeRefreshTokenByID :one
@@ -73,3 +73,6 @@ UPDATE users SET is_used= true WHERE id= $1;
 
 -- name: UpdatePassword :one
 UPDATE users SET password_hash= $1 WHERE id= $2 returning name; 
+
+-- name: RevokeRefreshTokens :one
+DELETE refresh_tokens SET password_hash= $1 WHERE id= $2 returning name; 

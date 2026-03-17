@@ -319,15 +319,16 @@ func (q *Queries) GetResetPasswordBySelector(ctx context.Context, selector strin
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password_hash, token_version FROM users WHERE email= $1
+SELECT id, name, email, password_hash, token_version, is_verified FROM users WHERE email= $1
 `
 
 type GetUserByEmailRow struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
-	TokenVersion int64  `json:"token_version"`
+	ID           int64       `json:"id"`
+	Name         string      `json:"name"`
+	Email        string      `json:"email"`
+	PasswordHash string      `json:"password_hash"`
+	TokenVersion int64       `json:"token_version"`
+	IsVerified   pgtype.Bool `json:"is_verified"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -339,6 +340,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Email,
 		&i.PasswordHash,
 		&i.TokenVersion,
+		&i.IsVerified,
 	)
 	return i, err
 }

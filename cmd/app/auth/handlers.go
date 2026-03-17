@@ -7,7 +7,6 @@ import (
 
 	"ecom/internal/err"
 	"ecom/internal/json"
-	"log"
 
 	"net/http"
 )
@@ -104,8 +103,8 @@ func (h *handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, rawRefreshToken, err := h.service.Login(r.Context(), req)
 	if err != nil {
-		log.Println(err.Error())
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 		// os.Exit(1) never do this it kills the server
 

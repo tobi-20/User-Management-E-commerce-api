@@ -1,10 +1,10 @@
 package auth
 
 import (
+	"context"
 	"ecom/cmd/app/globals"
 	"ecom/cmd/helpers"
 	repo "ecom/internal/adapters/postgresql/sqlc"
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -22,6 +22,7 @@ import (
 
 var (
 	ErrEmailAlreadyExists      = errors.New("email already exists")
+	ErrEmailNotVerified        = errors.New("email not verified")
 	ErrInvalidToken            = errors.New("invalid token")
 	ErrUserNotFound            = errors.New("user not found")
 	ErrTokenAlreadyUsed        = errors.New("token already used")
@@ -45,6 +46,7 @@ type AuthService interface {
 	SendConfirmUserTokenToEmail(ctx context.Context, req SignupReq) error
 	SendResetTokenToEmail(ctx context.Context, req ForgotPasswordRequest) error
 	ValidateVerification(ctx context.Context, verifier string, selector string) (repo.GetUserByIDRow, error)
+	Logout(ctx context.Context, LogoutReq)
 }
 
 type svc struct {
@@ -126,6 +128,10 @@ func (s *svc) Login(ctx context.Context, req LoginReq) (string, string, error) {
 	if err != nil {
 		return "", "", ErrUserNotFound
 	}
+	if !user.IsVerified.Bool {
+		return "", "", ErrEmailNotVerified
+	}
+
 	accessToken, refreshToken, err := s.IssueAuthTokens(ctx, helpers.ToUserEmail(user))
 
 	//compare to validate that password is correct
@@ -383,3 +389,4 @@ func (s *svc) ResetPassword(ctx context.Context, newPassParams ResetPassWordReq)
 	}
 	return nil
 }
+

@@ -1,8 +1,8 @@
 package auth
 
 import (
-	repo "ecom/internal/adapters/postgresql/sqlc"
 	"context"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 	"errors"
 	"testing"
 	"time"
@@ -191,9 +191,34 @@ func TestResetPassword_UpdatePassword(t *testing.T) {
 		},
 	}, nil)
 
-
 	m.On("UpdatePassword", mock.Anything, mock.Anything).Return("", errors.New("error"))
 
 	err := svc.ResetPassword(context.Background(), testParams)
 	assert.Error(t, err)
+}
+func TestResetPassword_Happy(t *testing.T) {
+	m := &mockRepo{}
+	svc := NewService(m)
+	testParams := ResetPassWordReq{
+		Selector: "selector",
+		Verifier: "verifier",
+		Password: "password",
+	}
+
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(testParams.Verifier), bcrypt.DefaultCost)
+
+	m.On("GetResetPasswordBySelector", mock.Anything, "selector").Return(repo.GetResetPasswordBySelectorRow{
+		VerifierHash: string(hashed),
+		UserID:       int64(3),
+		IsUsed:       false,
+		Expiry: pgtype.Timestamptz{
+			Time:  time.Now().Add(time.Hour),
+			Valid: true,
+		},
+	}, nil)
+
+	m.On("UpdatePassword", mock.Anything, mock.Anything).Return("success", nil)
+
+	err := svc.ResetPassword(context.Background(), testParams)
+	assert.NoError(t, err)
 }

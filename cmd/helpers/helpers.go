@@ -1,12 +1,13 @@
 package helpers
 
 import (
-	repo "ecom/internal/adapters/postgresql/sqlc"
 	"crypto/rand"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 	"encoding/base64"
 	"fmt"
 	"log"
 	"net/smtp"
+	"os"
 	"strings"
 
 	"github.com/google/uuid"
@@ -91,8 +92,8 @@ func SendVerificationLinkToEmail(link, email string) error {
 }
 func SendResetPasswordLinkToEmail(link, email string) error {
 
-	from := "olutobiseun18@gmail.com"
-	password := "bfwhtpyrmycnsoqx"
+	from := os.Getenv("EMAIL_ADDRESS")
+	password := os.Getenv("EMAIL_PASSWORD")
 
 	auth := smtp.PlainAuth("", from, password, "smtp.gmail.com")
 	to := []string{email}
