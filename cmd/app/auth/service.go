@@ -46,7 +46,6 @@ type AuthService interface {
 	SendConfirmUserTokenToEmail(ctx context.Context, req SignupReq) error
 	SendResetTokenToEmail(ctx context.Context, req ForgotPasswordRequest) error
 	ValidateVerification(ctx context.Context, verifier string, selector string) (repo.GetUserByIDRow, error)
-	Logout(ctx context.Context, LogoutReq)
 }
 
 type svc struct {
@@ -131,16 +130,16 @@ func (s *svc) Login(ctx context.Context, req LoginReq) (string, string, error) {
 	if !user.IsVerified.Bool {
 		return "", "", ErrEmailNotVerified
 	}
-
-	accessToken, refreshToken, err := s.IssueAuthTokens(ctx, helpers.ToUserEmail(user))
-
 	//compare to validate that password is correct
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
 	if err != nil {
 		return "", "", ErrUserNotFound
 	}
-	log.Println("successful login!")
+	accessToken, refreshToken, err := s.IssueAuthTokens(ctx, helpers.ToUserEmail(user))
 
+	if err != nil {
+		return "", "", err
+	}
 	//Generate the access token with a helper function
 	return accessToken, refreshToken, nil
 }
@@ -239,21 +238,16 @@ func (s *svc) IssueRefreshToken(ctx context.Context, rawToken string) (string, s
 		return "", "", err
 	}
 
-	refreshToken, err := s.repo.GetRefreshTokenByID(ctx, tokenID)
+	stored, err := s.repo.ConsumeRefreshTokenByID(ctx, tokenID)
 	if err != nil {
 		return "", "", ErrInvalidToken
 	}
-	if time.Now().After(refreshToken.ExpiresAt.Time) {
+	if time.Now().After(stored.ExpiresAt.Time) {
 		return "", "", ErrRefreshTokenExpired
 	}
 
-	if time.Since(refreshToken.CreatedAt.Time) > globals.MaxLifetime {
+	if time.Since(stored.CreatedAt.Time) > globals.MaxLifetime {
 		return "", "", ErrRefreshTokenMaxLifetime
-	}
-
-	stored, err := s.repo.ConsumeRefreshTokenByID(ctx, tokenID)
-	if err != nil {
-		return "", "", errors.New("token missing")
 	}
 
 	if err = bcrypt.CompareHashAndPassword([]byte(stored.HashedToken), []byte(secret)); err != nil {
@@ -296,7 +290,7 @@ func (s *svc) IssueRefreshToken(ctx context.Context, rawToken string) (string, s
 	if err != nil {
 		return "", "", err
 	}
-	return newAccessToken, rawToken, nil
+	return newAccessToken, newRaw, nil
 }
 
 func (s *svc) ConsumeCookie(ctx context.Context, cookie *http.Cookie) error {
@@ -389,4 +383,3 @@ func (s *svc) ResetPassword(ctx context.Context, newPassParams ResetPassWordReq)
 	}
 	return nil
 }
-

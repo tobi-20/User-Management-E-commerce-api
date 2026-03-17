@@ -134,18 +134,22 @@ func (h *handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("refresh_token")
 
 	if err != nil {
-		http.Error(w, "token missing", http.StatusExpectationFailed)
+		http.Error(w, "token missing", http.StatusBadRequest)
 		return
 
 	}
 	rawToken := cookie.Value
 
 	if rawToken == "" {
-		http.Error(w, "token missing", http.StatusExpectationFailed)
+		http.Error(w, "token missing", http.StatusBadRequest)
 		return
 	}
 
 	newAccessToken, newRaw, err := h.service.IssueRefreshToken(r.Context(), rawToken)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    newRaw,
@@ -170,7 +174,7 @@ func (h *handler) Logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("refresh_token")
 
 	if err != nil {
-		http.Error(w, "token does not exist", http.StatusMethodNotAllowed)
+		http.Error(w, "token missing", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -241,14 +245,12 @@ func (h *handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := json.Read(r, &newPassParams); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "something went wrong", http.StatusBadRequest)
 		return
 	}
 
 	h.service.ResetPassword(r.Context(), newPassParams)
-	if err := json.Read(r, &newPassParams); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
+	json.Write(w, http.StatusOK, map[string]string{
+		"message": "password updated",
+	})
 }
