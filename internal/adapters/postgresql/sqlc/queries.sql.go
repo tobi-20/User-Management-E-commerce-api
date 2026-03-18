@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const consumePasswordReset = `-- name: ConsumePasswordReset :one
+UPDATE password_reset SET is_used= true WHERE selector= $1 AND is_used= false AND expiry > now() returning user_id, verifier_hash
+`
+
+type ConsumePasswordResetRow struct {
+	UserID       int64  `json:"user_id"`
+	VerifierHash string `json:"verifier_hash"`
+}
+
+func (q *Queries) ConsumePasswordReset(ctx context.Context, selector string) (ConsumePasswordResetRow, error) {
+	row := q.db.QueryRow(ctx, consumePasswordReset, selector)
+	var i ConsumePasswordResetRow
+	err := row.Scan(&i.UserID, &i.VerifierHash)
+	return i, err
+}
+
 const consumeRefreshTokenByID = `-- name: ConsumeRefreshTokenByID :one
 DELETE FROM refresh_tokens WHERE token_id= $1 returning user_id, hashed_token, expires_at, created_at, token_id
 `
@@ -277,6 +293,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteAllRefreshTokenByUserID = `-- name: DeleteAllRefreshTokenByUserID :exec
+DELETE FROM refresh_tokens WHERE user_id= $1
+`
+
+func (q *Queries) DeleteAllRefreshTokenByUserID(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, deleteAllRefreshTokenByUserID, userID)
+	return err
+}
+
 const getRefreshTokenByID = `-- name: GetRefreshTokenByID :one
 SELECT id, user_id, hashed_token, expires_at, created_at, token_id FROM refresh_tokens WHERE token_id= $1
 `
@@ -518,11 +543,11 @@ func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) 
 }
 
 const updateResetPasswordStatus = `-- name: UpdateResetPasswordStatus :exec
-UPDATE users SET is_used= true WHERE id= $1
+UPDATE password_reset SET is_used= true WHERE selector= $1
 `
 
-func (q *Queries) UpdateResetPasswordStatus(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, updateResetPasswordStatus, id)
+func (q *Queries) UpdateResetPasswordStatus(ctx context.Context, selector string) error {
+	_, err := q.db.Exec(ctx, updateResetPasswordStatus, selector)
 	return err
 }
 

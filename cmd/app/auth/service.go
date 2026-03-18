@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
@@ -41,8 +42,8 @@ type AuthService interface {
 	IssueAuthTokens(ctx context.Context, user helpers.User) (string, string, error)
 	IssueRefreshToken(ctx context.Context, rawToken string) (string, string, error)
 	Login(ctx context.Context, req LoginReq) (string, string, error)
-	ResetPassword(ctx context.Context, newPasswordParam ResetPassWordReq) error
-	ValidateResetPasswordTokens(ctx context.Context, selector string, verifier string) (int64, error)
+	ResetPassword(ctx context.Context, db *pgx.Conn, newPasswordParam ResetPassWordReq) error
+	ValidateResetPasswordTokens(ctx context.Context, selector string, verifier string) (repo.GetResetPasswordBySelectorRow, string, error)
 	SendConfirmUserTokenToEmail(ctx context.Context, req SignupReq) error
 	SendResetTokenToEmail(ctx context.Context, req ForgotPasswordRequest) error
 	ValidateVerification(ctx context.Context, verifier string, selector string) (repo.GetUserByIDRow, error)
@@ -345,29 +346,43 @@ func (s *svc) SendResetTokenToEmail(ctx context.Context, req ForgotPasswordReque
 }
 
 // done
-func (s *svc) ValidateResetPasswordTokens(ctx context.Context, selector string, verifier string) (int64, error) {
+func (s *svc) ValidateResetPasswordTokens(ctx context.Context, selector string, verifier string) (repo.GetResetPasswordBySelectorRow, string, error) {
 	resetPasswordRow, err := s.repo.GetResetPasswordBySelector(ctx, selector)
 	if err != nil {
-		return 0, ErrTokenNotFound
+		return repo.GetResetPasswordBySelectorRow{}, "", ErrTokenNotFound
 	}
 	err = bcrypt.CompareHashAndPassword([]byte(resetPasswordRow.VerifierHash), []byte(verifier))
 	if err != nil {
-		return 0, err
+		return repo.GetResetPasswordBySelectorRow{}, "", err
 	}
 
 	if resetPasswordRow.IsUsed {
-		return 0, ErrTokenAlreadyUsed
+		return repo.GetResetPasswordBySelectorRow{}, "", ErrTokenAlreadyUsed
 	}
 	if time.Now().After(resetPasswordRow.Expiry.Time) {
-		return 0, ErrLinkExpired
+		return repo.GetResetPasswordBySelectorRow{}, "", ErrLinkExpired
 	}
-	return resetPasswordRow.UserID, nil
+	return resetPasswordRow, selector, nil
 }
 
-func (s *svc) ResetPassword(ctx context.Context, newPassParams ResetPassWordReq) error {
-	userId, err := s.ValidateResetPasswordTokens(ctx, newPassParams.Selector, newPassParams.Verifier)
+func (s *svc) ResetPassword(ctx context.Context, db *pgx.Conn, newPassParams ResetPassWordReq) error {
+
+	tx, err := db.Begin(ctx)
 	if err != nil {
 		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.repo.WithTx(tx)
+
+	ConsumeVerificationRow, err := qtx.ConsumePasswordReset(ctx, newPassParams.Selector)
+	if err != nil {
+		return err
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(ConsumeVerificationRow.VerifierHash), []byte(newPassParams.Verifier))
+	if err != nil {
+		return ErrInvalidToken
 	}
 	hashedNew, err := helpers.HashPassword(newPassParams.Password)
 	if err != nil {
@@ -375,11 +390,16 @@ func (s *svc) ResetPassword(ctx context.Context, newPassParams ResetPassWordReq)
 	}
 	params := repo.UpdatePasswordParams{
 		PasswordHash: hashedNew,
-		ID:           userId,
+		ID:           ConsumeVerificationRow.UserID,
 	}
 
-	if _, err = s.repo.UpdatePassword(ctx, params); err != nil {
+	if _, err = qtx.UpdatePassword(ctx, params); err != nil {
 		return err
 	}
-	return nil
+
+	if err = qtx.DeleteAllRefreshTokenByUserID(ctx, ConsumeVerificationRow.UserID); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

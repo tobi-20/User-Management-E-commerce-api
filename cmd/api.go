@@ -37,12 +37,14 @@ func (app *application) mount() http.Handler {
 	})
 
 	userService := auth.NewService(repo.New(app.db))
-	userHandler := auth.NewHandler(userService)
+	userHandler := auth.NewHandler(userService,
+		app.db)
 	mux.HandleFunc("/signup", userHandler.Signup)
 	mux.HandleFunc("/login", userHandler.Login)
 	mux.HandleFunc("/refresh", userHandler.RefreshToken)
 	mux.HandleFunc("/verify-user", userHandler.VerifyUser)
 	mux.HandleFunc("/send-reset", userHandler.SendResetTokenToEmail)
+	mux.HandleFunc("/reset-password", userHandler.ResetPassword)
 
 	return mux
 }

@@ -40,6 +40,10 @@ SELECT id, name, email, password_hash, token_version, is_verified FROM users WHE
 -- name: ConsumeRefreshTokenByID :one
 DELETE FROM refresh_tokens WHERE token_id= $1 returning user_id, hashed_token, expires_at, created_at, token_id;
 
+
+-- name: DeleteAllRefreshTokenByUserID :exec
+DELETE FROM refresh_tokens WHERE user_id= $1;
+
 -- name: GetRefreshTokenByID :one
 SELECT * FROM refresh_tokens WHERE token_id= $1;
 
@@ -69,10 +73,10 @@ INSERT INTO password_reset(verifier_hash, user_id, expiry, selector) values ($1,
 SELECT verifier_hash, user_id, is_used,expiry FROM password_reset WHERE selector=$1;
 
 -- name: UpdateResetPasswordStatus :exec
-UPDATE users SET is_used= true WHERE id= $1;
+UPDATE password_reset SET is_used= true WHERE selector= $1;
 
 -- name: UpdatePassword :one
 UPDATE users SET password_hash= $1 WHERE id= $2 returning name; 
 
--- name: RevokeRefreshTokens :one
-DELETE refresh_tokens SET password_hash= $1 WHERE id= $2 returning name; 
+-- name: ConsumePasswordReset :one
+UPDATE password_reset SET is_used= true WHERE selector= $1 AND is_used= false AND expiry > now() returning user_id, verifier_hash;

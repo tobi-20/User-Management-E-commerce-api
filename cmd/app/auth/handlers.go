@@ -9,17 +9,21 @@ import (
 	"ecom/internal/json"
 
 	"net/http"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var e *err.Error
 
 type handler struct {
 	service AuthService
+	db      *pgx.Conn
 }
 
-func NewHandler(service AuthService) *handler {
+func NewHandler(service AuthService, db *pgx.Conn) *handler {
 	return &handler{
 		service: service,
+		db:      db,
 	}
 }
 
@@ -229,7 +233,7 @@ func (h *handler) ValidateResetPassword(w http.ResponseWriter, r *http.Request) 
 	selector := r.URL.Query().Get("selector")
 	verifier := r.URL.Query().Get("verifier")
 
-	if _, err := h.service.ValidateResetPasswordTokens(r.Context(), selector, verifier); err != nil {
+	if _, _, err := h.service.ValidateResetPasswordTokens(r.Context(), selector, verifier); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -239,6 +243,7 @@ func (h *handler) ValidateResetPassword(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+
 	var newPassParams ResetPassWordReq
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -249,7 +254,10 @@ func (h *handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.service.ResetPassword(r.Context(), newPassParams)
+	if err := h.service.ResetPassword(r.Context(), h.db, newPassParams); err != nil {
+		http.Error(w, "something went wrong", http.StatusBadRequest)
+		return
+	}
 	json.Write(w, http.StatusOK, map[string]string{
 		"message": "password updated",
 	})

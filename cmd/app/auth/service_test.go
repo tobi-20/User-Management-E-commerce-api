@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -71,9 +72,27 @@ func (m *mockRepo) UpdateVerificationUsers(ctx context.Context, arg repo.UpdateV
 	args := m.Called(ctx, arg)
 	return args.Error(1)
 }
-func (m *mockRepo) UpdateVerifiedState(ctx context.Context, id int64) error {
-	args := m.Called(ctx, id)
+func (m *mockRepo) UpdateVerifiedState(ctx context.Context, userID int64) error {
+	args := m.Called(ctx, userID)
 	return args.Error(1)
+}
+func (m *mockRepo) DeleteAllRefreshTokenByUserID(ctx context.Context, userID int64) error {
+	args := m.Called(ctx, userID)
+	return args.Error(1)
+}
+func (m *mockRepo) UpdateResetPasswordStatus(ctx context.Context, selector string) error {
+	args := m.Called(ctx, selector)
+	return args.Error(1)
+}
+func (m *mockRepo) ConsumePasswordReset(ctx context.Context, selector string) (repo.ConsumePasswordResetRow, error) {
+	args := m.Called(ctx, selector)
+
+	return args.Get(0).(repo.ConsumePasswordResetRow), args.Error(1)
+}
+
+func (m *mockRepo) WithTx(tx pgx.Tx) *repo.Queries {
+	args := m.Called(tx)
+	return args.Get(0).(*repo.Queries)
 }
 
 func TestValidateResetPasswordTokens_SelectorNotFound(t *testing.T) {
@@ -81,7 +100,7 @@ func TestValidateResetPasswordTokens_SelectorNotFound(t *testing.T) {
 	m.On("GetResetPasswordBySelector", mock.Anything, "selector").Return(repo.GetResetPasswordBySelectorRow{}, errors.New("not found"))
 
 	svc := NewService(m)
-	_, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", "verifier")
+	_, _, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", "verifier")
 	assert.ErrorIs(t, err, ErrTokenNotFound)
 }
 func TestValidateResetPasswordTokens_VerifierWrong(t *testing.T) {
@@ -95,7 +114,7 @@ func TestValidateResetPasswordTokens_VerifierWrong(t *testing.T) {
 	}, nil)
 
 	svc := NewService(m)
-	_, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", "verifier")
+	_, _, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", "verifier")
 
 	assert.Error(t, err)
 }
@@ -111,7 +130,7 @@ func TestValidateResetPasswordTokens_ResetTokenUsed(t *testing.T) {
 	}, nil)
 
 	svc := NewService(m)
-	_, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", "verifier")
+	_, _, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", "verifier")
 
 	assert.ErrorIs(t, err, ErrTokenAlreadyUsed)
 }
@@ -131,7 +150,7 @@ func TestValidateResetPasswordTokens_TokenExpired(t *testing.T) {
 	}, nil)
 
 	svc := NewService(m)
-	_, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", "verifier")
+	_, _, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", "verifier")
 
 	assert.ErrorIs(t, err, ErrLinkExpired)
 }
@@ -151,13 +170,14 @@ func TestValidateResetPasswordTokens_Happy(t *testing.T) {
 			Valid: true,
 		},
 	}, nil)
-	userId, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", text)
+	userId, _, err := svc.ValidateResetPasswordTokens(context.Background(), "selector", text)
 	assert.NoError(t, err)
 	assert.Equal(t, userId, int64(3))
 }
 
 func TestResetPassword_ValidateResetPasswordTokens(t *testing.T) {
 	m := &mockRepo{}
+	var db *pgx.Conn
 	testParams := ResetPassWordReq{
 		Selector: "selector",
 		Verifier: "verifier",
@@ -167,12 +187,13 @@ func TestResetPassword_ValidateResetPasswordTokens(t *testing.T) {
 	svc := NewService(m)
 	m.On("GetResetPasswordBySelector", mock.Anything, "selector").Return(repo.GetResetPasswordBySelectorRow{}, errors.New("error"))
 
-	err := svc.ResetPassword(context.Background(), testParams)
+	err := svc.ResetPassword(context.Background(), db, testParams)
 	assert.Error(t, err)
 }
 func TestResetPassword_UpdatePassword(t *testing.T) {
 	m := &mockRepo{}
 	svc := NewService(m)
+	var db *pgx.Conn
 	testParams := ResetPassWordReq{
 		Selector: "selector",
 		Verifier: "verifier",
@@ -193,12 +214,13 @@ func TestResetPassword_UpdatePassword(t *testing.T) {
 
 	m.On("UpdatePassword", mock.Anything, mock.Anything).Return("", errors.New("error"))
 
-	err := svc.ResetPassword(context.Background(), testParams)
+	err := svc.ResetPassword(context.Background(), db, testParams)
 	assert.Error(t, err)
 }
 func TestResetPassword_Happy(t *testing.T) {
 	m := &mockRepo{}
 	svc := NewService(m)
+	var db *pgx.Conn
 	testParams := ResetPassWordReq{
 		Selector: "selector",
 		Verifier: "verifier",
@@ -219,6 +241,6 @@ func TestResetPassword_Happy(t *testing.T) {
 
 	m.On("UpdatePassword", mock.Anything, mock.Anything).Return("success", nil)
 
-	err := svc.ResetPassword(context.Background(), testParams)
+	err := svc.ResetPassword(context.Background(), db, testParams)
 	assert.NoError(t, err)
 }

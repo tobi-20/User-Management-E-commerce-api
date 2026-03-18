@@ -1,9 +1,10 @@
 package auth
 
 import (
-	repo "ecom/internal/adapters/postgresql/sqlc"
 	"context"
+	repo "ecom/internal/adapters/postgresql/sqlc"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -22,5 +23,8 @@ type AuthRepository interface {
 	UpdatePassword(ctx context.Context, arg repo.UpdatePasswordParams) (string, error)
 	UpdateVerificationUsers(ctx context.Context, arg repo.UpdateVerificationUsersParams) error
 	UpdateVerifiedState(ctx context.Context, id int64) error
-	// UpdateResetPasswordStatus(ctx context.Context, id int64) error
+	DeleteAllRefreshTokenByUserID(ctx context.Context, userID int64) error
+	UpdateResetPasswordStatus(ctx context.Context, selector string) error
+	ConsumePasswordReset(ctx context.Context, selector string) (repo.ConsumePasswordResetRow, error)
+	WithTx(tx pgx.Tx) *repo.Queries
 }

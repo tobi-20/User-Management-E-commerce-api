@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ConsumePasswordReset(ctx context.Context, selector string) (ConsumePasswordResetRow, error)
 	ConsumeRefreshTokenByID(ctx context.Context, tokenID string) (ConsumeRefreshTokenByIDRow, error)
 	ConsumeVerification(ctx context.Context, id pgtype.UUID) (ConsumeVerificationRow, error)
 	CreateBrand(ctx context.Context, name string) (Brand, error)
@@ -21,6 +22,7 @@ type Querier interface {
 	CreateProductVariant(ctx context.Context, arg CreateProductVariantParams) (ProductVariant, error)
 	CreateShippingRules(ctx context.Context, arg CreateShippingRulesParams) (ShippingRule, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteAllRefreshTokenByUserID(ctx context.Context, userID int64) error
 	GetRefreshTokenByID(ctx context.Context, tokenID string) (RefreshToken, error)
 	GetResetPasswordBySelector(ctx context.Context, selector string) (GetResetPasswordBySelectorRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
@@ -30,7 +32,7 @@ type Querier interface {
 	SaveRefreshToken(ctx context.Context, arg SaveRefreshTokenParams) (RefreshToken, error)
 	SaveResetPassword(ctx context.Context, arg SaveResetPasswordParams) (SaveResetPasswordRow, error)
 	UpdatePassword(ctx context.Context, arg UpdatePasswordParams) (string, error)
-	UpdateResetPasswordStatus(ctx context.Context, id int64) error
+	UpdateResetPasswordStatus(ctx context.Context, selector string) error
 	UpdateVerificationUsers(ctx context.Context, arg UpdateVerificationUsersParams) error
 	UpdateVerifiedState(ctx context.Context, id int64) error
 }
